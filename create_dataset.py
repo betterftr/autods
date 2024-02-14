@@ -209,7 +209,7 @@ def process_text_for_api(text):
                     txt_file.write(f"\"role\": \"{response['role']}\"\n")
                     txt_file.write(f"\"content\": \"{response['content']}\"\n\n")
             
-            if chunks_processed % 1 == 0:
+            if chunks_processed % 10 == 0:
                 extract_qa_and_save(tmp_file, output_file)
                 print(f"Cleaning up results.txt...")
                 all_responses.clear()
