@@ -221,6 +221,7 @@ def process_text_for_api(text):
 
 
 # Function to extract questions and answers and save them to a new file
+questions_answers = set()  # Define global variable to store question-answer pairs
 def extract_qa_and_save(tmp_file, output_file):
     global questions_answers
     try:
@@ -231,9 +232,6 @@ def extract_qa_and_save(tmp_file, output_file):
         # Initialize a list to store question-answer pairs
         print("Data from tmp file:", data)  # Add this print statement
         
-        # Initialize a set to store unique question-answer pairs
-        unique_qa_pairs = set()
-        
         # Parse the content of the tmp file
         pattern = r'"question"\s*:\s*"([^"]+)"\s*,\s*"answer"\s*:\s*"([^"]+(?:https?://[^\s]+)*)"'
         matches = re.finditer(pattern, data)
@@ -242,15 +240,15 @@ def extract_qa_and_save(tmp_file, output_file):
             answer_str = match.group(2)
             print("Question:", question)
             print("Answer:", answer_str)
-            # If both question and answer are found, add them to the set of unique pairs
+            # If both question and answer are found, add them to the global variable
             if question and answer_str:
-                unique_qa_pairs.add((question, answer_str))
+                questions_answers.add((question, answer_str))
 
         # Check if there are valid unique question-answer pairs to save
-        if unique_qa_pairs:
-            # Append the unique question-answer pairs to the output file
-            with open(output_file, 'a', encoding='utf-8') as json_file:
-                for question, answer in unique_qa_pairs:
+        if questions_answers:
+            # Rewrite the output file with unique question-answer pairs
+            with open(output_file, 'w', encoding='utf-8') as json_file:
+                for question, answer in questions_answers:
                     json.dump({"question": question, "answer": answer}, json_file, indent=4, ensure_ascii=False)
                     json_file.write('\n')  # Add a new line for separation
     except Exception as e:
