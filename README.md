@@ -22,3 +22,5 @@ WEBPAGE_CHUNK_SIZE = 128`
 
 LLM used in my tests:
 >mistral-7b-instruct-v0.2.Q4_0.gguf
+
+Be careful tho, I went to eat dinner and it already created a 500k .json, make sure to watch it work if you decide to use it on websites with DEPTH 1+
