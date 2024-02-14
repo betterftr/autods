@@ -1,16 +1,42 @@
+import subprocess
+import sys
+
+def install(package):
+    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+# List of dependencies
+dependencies = ['PyPDF2', 'nltk', 'requests', 'bs4', 'openai']
+
+# Check and install dependencies if not already installed
+for dependency in dependencies:
+    try:
+        __import__(dependency)
+    except ImportError:
+        print(f"{dependency} is not installed. Installing...")
+        install(dependency)
+
+# Additional setup for nltk
+try:
+    import nltk
+    nltk.data.find('punkt')
+except LookupError:
+    print("Downloading NLTK data...")
+    nltk.download('punkt')
+
 import PyPDF2
 import os
+import time
 import json
 import nltk
-nltk.download('punkt')
 import requests
 from bs4 import BeautifulSoup
 from openai import OpenAI
 from urllib.parse import urljoin, urlparse
 import re
 from collections import defaultdict, deque
+from combine_dataset import main
 
-DEPTH_LIMIT = 2
+DEPTH_LIMIT = 1
 
 # Webpage_or_PDF = 'C:/files/test2.pdf'
 Webpage_or_PDF = 'https://www.somewebsite.com/'
@@ -27,10 +53,10 @@ output_file = f"{directory}/{basename}_cleaned.json"
 # Ensure directory exists and create file if not exist
 os.makedirs(directory, exist_ok=True)
 if not os.path.exists(output_file):
-    with open(output_file, 'w') as f:
+    with open(output_file, 'w', encoding="utf-8") as f:
         f.write('')
 
-tmp_file = './results.txt'
+tmp_file = './tmp.txt'
 
 # Chunk size for PDFs
 PDF_CHUNK_SIZE = 512
@@ -40,12 +66,12 @@ WEBPAGE_CHUNK_SIZE = 128
 
 global_token_count = 0
 
-with open(tmp_file, "w") as txt_file:
-    print(f"Cleaning results.txt...")
+with open(tmp_file, "w", encoding="utf-8") as txt_file:
+    print(f"Cleaning tmp.txt...")
     # Write an empty string to clear the file
     txt_file.write("")
 
-with open(output_file, "w") as txt_file:
+with open(output_file, "w", encoding="utf-8") as txt_file:
     print(f"Cleaning existing output...")
     # Write an empty string to clear the file
     txt_file.write("")
@@ -62,21 +88,6 @@ def extract_text_from_pdf(pdf_file):
         for page in reader.pages:
             text += page.extract_text()
     return text
-
-# Function to process a chunk of text
-def process_text_chunk(text_chunk):
-    global global_token_count, chunks_processed
-    # Process the chunk of text
-    try:
-        process_text_for_api(text_chunk)
-        # Update token count for this chunk
-        token_count = len(tokenize_text(text_chunk))
-        global_token_count += token_count
-        print(f"Token count for this chunk: {token_count}")
-        print(f"Global token count: {global_token_count}")
-        chunks_processed += 1  # Increment the chunks_processed counter
-    except Exception as e:
-        print(f"Error processing chunk: {str(e)}")
 
 # Function to chunk text and process each chunk
 def process_text_in_chunks(text, chunk_size, process_chunk_function):
@@ -178,7 +189,7 @@ def process_text_for_api(text):
             {"role": "user", "content": text},
         ]
         
-        # Append history to results.txt
+        # Append history to tmp.txt
         with open(tmp_file, "a", encoding="utf-8") as txt_file:
             # Use "a" for append mode and specify encoding as utf-8
             for message in history:
@@ -208,48 +219,67 @@ def process_text_for_api(text):
                 for response in all_responses:
                     txt_file.write(f"\"role\": \"{response['role']}\"\n")
                     txt_file.write(f"\"content\": \"{response['content']}\"\n\n")
-                    extract_qa_and_save(tmp_file, output_file)
+                    
 
-            if chunks_processed % 1 == 0:
-                print(f"Cleaning up results.txt...")
+            if chunks_processed % 2 == 0:
                 all_responses.clear()
-                questions_answers.clear()  # Fix typo
+                questions_answers.clear()
+                existing_pairs.clear()
+                unique_qa_pairs.clear()
+                extract_qa_and_save(tmp_file, output_file)
+                with open(tmp_file, "w", encoding="utf-8") as txt_file:
+                    print(f"Cleaning tmp.txt...")
+                    # Write an empty string to clear the file
+                    txt_file.write("")
+                main()
+                
         
         extract_qa_and_save(tmp_file, output_file)       
     except Exception as e:
         print("Error occurred:", str(e))
 
 
+existing_pairs = set()
+unique_qa_pairs = set()
+
 # Function to extract questions and answers and save them to a new file
-questions_answers = set()  # Define global variable to store question-answer pairs
 def extract_qa_and_save(tmp_file, output_file):
-    global questions_answers
     try:
-        # Read the content of the tmp file
-        with open(tmp_file, 'r', encoding='utf-8') as file:
-            data = file.read()  # Read the entire file as a single string
-        data = data.replace('\\', '')    
-        # Initialize a list to store question-answer pairs
-        print("Data from tmp file:", data)  # Add this print statement
+
         
         # Parse the content of the tmp file
-        pattern = r'"question"\s*:\s*"([^"]+)"\s*,\s*"answer"\s*:\s*"([^"]+(?:https?://[^\s]+)*)"'
-        matches = re.finditer(pattern, data)
-        for match in matches:
-            question = match.group(1)
-            answer_str = match.group(2)
-            print("Question:", question)
-            print("Answer:", answer_str)
-            # If both question and answer are found, add them to the global variable
-            if question and answer_str:
-                questions_answers.add((question, answer_str))
+        with open(tmp_file, 'r', encoding='utf-8') as file:
+            data = file.read()  # Read the entire file as a single string
 
-        # Check if there are valid unique question-answer pairs to save
-        if questions_answers:
-            # Rewrite the output file with unique question-answer pairs
-            with open(output_file, 'w', encoding='utf-8') as json_file:
-                for question, answer in questions_answers:
-                    json.dump({"question": question, "answer": answer}, json_file, indent=4, ensure_ascii=False)
+            # Define the pattern to extract question-answer pairs
+            pattern = r'"question"\s*:\s*"([^"]+)"\s*,\s*"answer"\s*:\s*"([^"]+(?:https?://[^\s]+)*)"'
+            matches = re.findall(pattern, data)
+
+            # Iterate over matches and add them to unique_qa_pairs set
+            for match in matches:
+                question = match[0].strip()  # Strip to remove any leading/trailing spaces
+                answer = match[1].strip()
+                unique_qa_pairs.add((question, answer))
+
+        # Read existing content of the output file to avoid duplicates
+
+        try:
+            with open(output_file, 'r', encoding='utf-8') as json_file:
+                for line in json_file:
+                    try:
+                        qa_pair = json.loads(line)
+                        existing_pairs.add((qa_pair["question"], qa_pair["answer"]))
+                    except json.JSONDecodeError:
+                        print("Error decoding JSON:", line)  # Log the line causing the error
+                        pass  # If JSON decoding fails, skip this line
+        except FileNotFoundError:
+            pass  # If the file doesn't exist yet, no need to worry about duplicates
+            
+        # Append only unique question-answer pairs to the output file
+        with open(output_file, 'a', encoding='utf-8') as json_file:
+            for question, answer in unique_qa_pairs:
+                if (question, answer) not in existing_pairs:
+                    json.dump({"question": question, "answer": answer}, json_file, ensure_ascii=False)
                     json_file.write('\n')  # Add a new line for separation
     except Exception as e:
         print("Error occurred during extraction:", str(e))
