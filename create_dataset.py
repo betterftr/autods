@@ -65,7 +65,7 @@ def extract_text_from_pdf(pdf_file):
 
 # Function to process a chunk of text
 def process_text_chunk(text_chunk):
-    global global_token_count
+    global global_token_count, chunks_processed
     # Process the chunk of text
     try:
         process_text_for_api(text_chunk)
@@ -74,6 +74,7 @@ def process_text_chunk(text_chunk):
         global_token_count += token_count
         print(f"Token count for this chunk: {token_count}")
         print(f"Global token count: {global_token_count}")
+        chunks_processed += 1  # Increment the chunks_processed counter
     except Exception as e:
         print(f"Error processing chunk: {str(e)}")
 
@@ -208,7 +209,7 @@ def process_text_for_api(text):
                     txt_file.write(f"\"role\": \"{response['role']}\"\n")
                     txt_file.write(f"\"content\": \"{response['content']}\"\n\n")
             
-            if chunks_processed % 1 == 0:
+            if chunks_processed % 10 == 0:
                 extract_qa_and_save(tmp_file, output_file)
                 print(f"Cleaning up results.txt...")
                 all_responses.clear()
@@ -224,31 +225,34 @@ def process_text_for_api(text):
 
 # Function to extract questions and answers and save them to a new file
 def extract_qa_and_save(tmp_file, output_file):
-    # Read the content of the tmp file
-    with open(tmp_file, 'r', encoding='utf-8') as file:
-        data = file.read()  # Read the entire file as a single string
-    data = data.replace('\\', '')    
-    # Initialize a list to store question-answer pairs
-    questions_answers = []
-    print("Data from tmp file:", data)  # Add this print statement
-    # Parse the content of the tmp file
-    pattern = r'"question"\s*:\s*"([^"]+)"\s*,\s*"answer"\s*:\s*"([^"]+(?:https?://[^\s]+)*)"'
-    matches = re.finditer(pattern, data)
-    for match in matches:
-        question = match.group(1)
-        answer_str = match.group(2)
-        print("Question:", question)
-        print("Answer:", answer_str)
-        # If both question and answer are found, add them to the list
-        if question and answer_str:
-            questions_answers.append({"question": question, "answer": answer_str})
+    global questions_answers
+    try:
+        # Read the content of the tmp file
+        with open(tmp_file, 'r', encoding='utf-8') as file:
+            data = file.read()  # Read the entire file as a single string
+        data = data.replace('\\', '')    
+        # Initialize a list to store question-answer pairs
+        print("Data from tmp file:", data)  # Add this print statement
+        # Parse the content of the tmp file
+        pattern = r'"question"\s*:\s*"([^"]+)"\s*,\s*"answer"\s*:\s*"([^"]+(?:https?://[^\s]+)*)"'
+        matches = re.finditer(pattern, data)
+        for match in matches:
+            question = match.group(1)
+            answer_str = match.group(2)
+            print("Question:", question)
+            print("Answer:", answer_str)
+            # If both question and answer are found, add them to the list
+            if question and answer_str:
+                questions_answers.append({"question": question, "answer": answer_str})
 
-    # Check if there are valid question-answer pairs to save
-    if questions_answers:
-        # Append the question-answer pairs to the output file
-        with open(output_file, 'a', encoding='utf-8') as json_file:
-            json.dump(questions_answers, json_file, indent=4, ensure_ascii=False)
-            json_file.write('\n')  # Add a new line for separation
+        # Check if there are valid question-answer pairs to save
+        if questions_answers:
+            # Append the question-answer pairs to the output file
+            with open(output_file, 'a', encoding='utf-8') as json_file:
+                json.dump(questions_answers, json_file, indent=4, ensure_ascii=False)
+                json_file.write('\n')  # Add a new line for separation
+    except Exception as e:
+        print("Error occurred during extraction:", str(e))
 
 # Example usage:
 pdf_or_webpage = Webpage_or_PDF  # Webpage URL or pdf
