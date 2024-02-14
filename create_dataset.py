@@ -208,15 +208,12 @@ def process_text_for_api(text):
                 for response in all_responses:
                     txt_file.write(f"\"role\": \"{response['role']}\"\n")
                     txt_file.write(f"\"content\": \"{response['content']}\"\n\n")
-            
-            if chunks_processed % 10 == 0:
-                extract_qa_and_save(tmp_file, output_file)
+                    extract_qa_and_save(tmp_file, output_file)
+
+            if chunks_processed % 1 == 0:
                 print(f"Cleaning up results.txt...")
                 all_responses.clear()
                 questions_answers.clear()  # Fix typo
-                with open(tmp_file, "w") as txt_file:
-                    #Write an empty string to clear the file
-                    txt_file.write("")
         
         extract_qa_and_save(tmp_file, output_file)       
     except Exception as e:
@@ -233,6 +230,10 @@ def extract_qa_and_save(tmp_file, output_file):
         data = data.replace('\\', '')    
         # Initialize a list to store question-answer pairs
         print("Data from tmp file:", data)  # Add this print statement
+        
+        # Initialize a set to store unique question-answer pairs
+        unique_qa_pairs = set()
+        
         # Parse the content of the tmp file
         pattern = r'"question"\s*:\s*"([^"]+)"\s*,\s*"answer"\s*:\s*"([^"]+(?:https?://[^\s]+)*)"'
         matches = re.finditer(pattern, data)
@@ -241,16 +242,17 @@ def extract_qa_and_save(tmp_file, output_file):
             answer_str = match.group(2)
             print("Question:", question)
             print("Answer:", answer_str)
-            # If both question and answer are found, add them to the list
+            # If both question and answer are found, add them to the set of unique pairs
             if question and answer_str:
-                questions_answers.append({"question": question, "answer": answer_str})
+                unique_qa_pairs.add((question, answer_str))
 
-        # Check if there are valid question-answer pairs to save
-        if questions_answers:
-            # Append the question-answer pairs to the output file
+        # Check if there are valid unique question-answer pairs to save
+        if unique_qa_pairs:
+            # Append the unique question-answer pairs to the output file
             with open(output_file, 'a', encoding='utf-8') as json_file:
-                json.dump(questions_answers, json_file, indent=4, ensure_ascii=False)
-                json_file.write('\n')  # Add a new line for separation
+                for question, answer in unique_qa_pairs:
+                    json.dump({"question": question, "answer": answer}, json_file, indent=4, ensure_ascii=False)
+                    json_file.write('\n')  # Add a new line for separation
     except Exception as e:
         print("Error occurred during extraction:", str(e))
 
