@@ -229,6 +229,7 @@ def extract_qa_and_save(tmp_file, output_file):
         data = file.read()  # Read the entire file as a single string
     data = data.replace('\\', '')    
     # Initialize a list to store question-answer pairs
+    questions_answers = []
     print("Data from tmp file:", data)  # Add this print statement
     # Parse the content of the tmp file
     pattern = r'"question"\s*:\s*"([^"]+)"\s*,\s*"answer"\s*:\s*"([^"]+(?:https?://[^\s]+)*)"'
@@ -238,30 +239,9 @@ def extract_qa_and_save(tmp_file, output_file):
         answer_str = match.group(2)
         print("Question:", question)
         print("Answer:", answer_str)
-        try:
-            # Try loading answer as JSON
-            answer = json.loads(answer_str)
-        except json.JSONDecodeError:
-            # If JSON decoding fails, attempt to fix the format
-            fixed_answer_str = answer_str.replace('\\', '\\\\')  # Escape backslashes
-            fixed_answer_str = fixed_answer_str.replace('"', '\\"')  # Escape double quotes
-            fixed_answer_str = f'"{fixed_answer_str}"'  # Enclose in double quotes
-            try:
-                # Try loading fixed JSON
-                answer = json.loads(fixed_answer_str)
-            except json.JSONDecodeError:
-                # If fixing fails, include the original string as is
-                answer = answer_str
         # If both question and answer are found, add them to the list
-        if question and answer:
-            if isinstance(answer, str):
-                # If the answer is still a string, attempt to load it as JSON
-                try:
-                    answer = json.loads(answer)
-                except json.JSONDecodeError:
-                    # If JSON decoding fails again, include the answer as is
-                    pass
-            questions_answers.append({"question": question, "answer": answer})
+        if question and answer_str:
+            questions_answers.append({"question": question, "answer": answer_str})
 
     # Check if there are valid question-answer pairs to save
     if questions_answers:
