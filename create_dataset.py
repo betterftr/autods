@@ -203,7 +203,7 @@ def process_text_for_api(text):
             all_responses.append(new_message)
             
             # Save all_responses to text file
-            with open(tmp_file, "a") as txt_file:  # Use "a" for append mode
+            with open(tmp_file, "a", encoding="utf-8") as txt_file:  # Use "a" for append mode
                 for response in all_responses:
                     txt_file.write(f"\"role\": \"{response['role']}\"\n")
                     txt_file.write(f"\"content\": \"{response['content']}\"\n\n")
