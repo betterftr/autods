@@ -250,7 +250,7 @@ def extract_qa_and_save(tmp_file, output_file):
         # Parse the content of the tmp file
         with open(tmp_file, 'r', encoding='utf-8') as file:
             data = file.read()  # Read the entire file as a single string
-
+            data = data.replace('\\', '') 
             # Define the pattern to extract question-answer pairs
             pattern = r'"question"\s*:\s*"([^"]+)"\s*,\s*"answer"\s*:\s*"([^"]+(?:https?://[^\s]+)*)"'
             matches = re.findall(pattern, data)
