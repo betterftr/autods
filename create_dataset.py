@@ -5,7 +5,7 @@ def install(package):
     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 
 # List of dependencies
-dependencies = ['PyPDF2', 'nltk', 'requests', 'bs4', 'openai']
+dependencies = ['PyPDF2', 'nltk', 'requests', 'bs4', 'openai', 'transformers']
 
 # Check and install dependencies if not already installed
 for dependency in dependencies:
@@ -35,6 +35,7 @@ from urllib.parse import urljoin, urlparse
 import re
 from collections import defaultdict, deque
 from combine_dataset import main
+from transformers import AutoTokenizer
 
 # Webpage_or_PDF = 'C:/files/test2.pdf'
 Webpage_or_PDF = 'https://www.somewebsite.com/'
@@ -45,7 +46,7 @@ user_message = ''
 assistant_message = ''
 
 client = OpenAI(base_url="http://localhost:8081/v1", api_key="not-needed") # For LM Studio
-
+tokenizer = AutoTokenizer.from_pretrained('bert-large-uncased')
 parsed_url = urlparse(Webpage_or_PDF)
 basename = os.path.basename(parsed_url.path.rstrip('/'))
 # Directory path
@@ -87,7 +88,7 @@ with open(output_file, "w", encoding="utf-8") as txt_file:
 
 # Function to tokenize text
 def tokenize_text(text):
-    return nltk.word_tokenize(text)
+    return tokenizer.tokenize(text)
 
 # Function to extract text from PDF file
 def extract_text_from_pdf(pdf_file):
