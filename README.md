@@ -23,8 +23,6 @@ WEBPAGE_CHUNK_SIZE = 128`
 LLM used in my tests:
 >mistral-7b-instruct-v0.2.Q4_0.gguf
 
-Be careful leaving it running on websites with DEPTH 1+, the resulting file can be big.
-
 
 Working:
 
