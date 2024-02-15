@@ -39,10 +39,10 @@ from combine_dataset import main
 # Webpage_or_PDF = 'C:/files/test2.pdf'
 Webpage_or_PDF = 'https://www.somewebsite.com/'
 
-#Prompt stuff
-system_message = 'You follow instructions precisely.'
-user_message = '### Instruction: You are an API that converts bodies of text into JSON. Json pairs format: "question" and "answer" lowercase. Each JSON contains a single question with a single answer. There cant be any backslashes or symbols nor brackets. Only respond with the JSON. Maximum 3 "question" "answer" pairs. In case there are urls output them with only the domain name. Be descriptive and truthful to original wording in the answers and short with the questions.'
-assistant_message = '### Response: '
+#Prompt stuff, include your models needs like ### Instruction: ### Response:
+system_message = 'You are an API that converts bodies of text into JSON. Json pairs format: "question" and "answer" lowercase. Each JSON contains a single question with a single answer. There cant be any backslashes or symbols nor brackets. Only respond with the JSON. Maximum 3 "question" "answer" pairs. In case there are urls output them with only the domain name. Be descriptive and truthful to original wording in the answers and short with the questions.'
+user_message = ''
+assistant_message = ''
 
 client = OpenAI(base_url="http://localhost:8081/v1", api_key="not-needed") # For LM Studio
 
