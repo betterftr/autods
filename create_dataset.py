@@ -5,7 +5,7 @@ def install(package):
     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 
 # List of dependencies
-dependencies = ['PyPDF2', 'nltk', 'requests', 'bs4', 'openai', 'transformers']
+dependencies = ['PyPDF2', 'nltk', 'requests', 'bs4', 'openai', 'transformers', 'sentencepiece']
 
 # Check and install dependencies if not already installed
 for dependency in dependencies:
@@ -29,6 +29,7 @@ import time
 import json
 import nltk
 import requests
+import sentencepiece
 from bs4 import BeautifulSoup, Tag
 from openai import OpenAI
 from urllib.parse import urljoin, urlparse
@@ -46,7 +47,7 @@ user_message = ''
 assistant_message = ''
 
 client = OpenAI(base_url="http://localhost:8081/v1", api_key="not-needed") # For LM Studio
-tokenizer = AutoTokenizer.from_pretrained('bert-large-uncased')
+tokenizer = AutoTokenizer.from_pretrained('SnypzZz/Llama2-13b-Language-translate')
 parsed_url = urlparse(Webpage_or_PDF)
 basename = os.path.basename(parsed_url.path.rstrip('/'))
 # Directory path
