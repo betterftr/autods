@@ -27,8 +27,6 @@ WEBPAGE_CHUNK_SIZE = 128`
 Tested with:
 >LM Studio + `mistral-7b-instruct-v0.2.Q4_0.gguf`
 
-
-
 Working:
 
 ![1](https://github.com/betterftr/autods/assets/84087448/a6c97232-cb37-4684-a4ca-e48957bd7e13)
@@ -38,3 +36,4 @@ Example output in DATASET:
 
 ![2](https://github.com/betterftr/autods/assets/84087448/630a6538-763c-40d9-9e79-131d63300d47)
 
+Note: For JSON keys other than "question" and "answer", both files have to be edited a bit
