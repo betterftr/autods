@@ -28,7 +28,8 @@ Be careful leaving it running on websites with DEPTH 1+, the resulting file can 
 
 Working:
 
-![1](https://github.com/betterftr/autods/assets/84087448/6323b139-069e-47ca-981a-4eceeadf5f5d)
+![1](https://github.com/betterftr/autods/assets/84087448/a6c97232-cb37-4684-a4ca-e48957bd7e13)
+
 
 Example output in DATASET:
 
