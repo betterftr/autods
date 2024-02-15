@@ -236,9 +236,6 @@ def process_text_for_api(text):
         print("Error occurred:", str(e))
 
 
-existing_pairs = set()
-unique_qa_pairs = set()
-
 # Function to extract questions and answers and save them to a new file
 def extract_qa_and_save(tmp_file, output_file):
     try:
