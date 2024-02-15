@@ -36,4 +36,4 @@ Example output in DATASET:
 
 ![2](https://github.com/betterftr/autods/assets/84087448/630a6538-763c-40d9-9e79-131d63300d47)
 
-Note: For JSON keys other than "question" and "answer", both files have to be edited a bit
+Note: For JSON keys other than "question" and "answer", just edit the files and replace them with whatever you want
