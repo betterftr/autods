@@ -11,9 +11,9 @@ Edit client:
 >example
 `client = OpenAI(base_url="http://localhost:8081/v1", api_key="not-needed") # This for example is for LM Studio`
 
-Edit role:
+Edit your instruction:
 >example
-`role = 'You are an API that converts bodies of text into JSON "question" "answer" format. Each JSON contains a single question with a single answer. You format the JSON question-answer pairs: There cant be any backslashes or symbols nor brackets. Only respond with the JSON and no additional text. Maximum 3 question-answer pairs. In case there are urls output them with only the domain name. Be descriptive in the answers and not in the questions'`
+`user_message = 'You are an API that converts bodies of text into JSON "question" "answer" format. Each JSON contains a single question with a single answer. You format the JSON question-answer pairs: There cant be any backslashes or symbols nor brackets. Only respond with the JSON and no additional text. Maximum 3 question-answer pairs. In case there are urls output them with only the domain name. Be descriptive in the answers and not in the questions'`
 
 Edit prompt template to fit your model:
 >example
