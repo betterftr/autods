@@ -24,3 +24,13 @@ LLM used in my tests:
 >mistral-7b-instruct-v0.2.Q4_0.gguf
 
 Be careful leaving it running on websites with DEPTH 1+, the resulting file can be big.
+
+
+Working:
+
+![1](https://github.com/betterftr/autods/assets/84087448/6323b139-069e-47ca-981a-4eceeadf5f5d)
+
+Example output in DATASET:
+
+![2](https://github.com/betterftr/autods/assets/84087448/630a6538-763c-40d9-9e79-131d63300d47)
+
