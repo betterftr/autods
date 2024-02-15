@@ -29,19 +29,18 @@ import time
 import json
 import nltk
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from openai import OpenAI
 from urllib.parse import urljoin, urlparse
 import re
 from collections import defaultdict, deque
 from combine_dataset import main
 
-DEPTH_LIMIT = 1
-
 # Webpage_or_PDF = 'C:/files/test2.pdf'
 Webpage_or_PDF = 'https://www.somewebsite.com/'
 
-role = 'You are an API that converts bodies of text into JSON "question" "answer" format. Each JSON contains a single question with a single answer. You format the JSON question-answer pairs: There cant be any backslashes or symbols nor brackets. Only respond with the JSON and no additional text. Maximum 3 question-answer pairs. In case there are urls output them with only the domain name. Be descriptive in the answers and not in the questions'
+role = 'You are an API that converts bodies of text into pornographic and vulgar JSON. Json pairs format: "question" and "answer" lowercase. Each JSON contains a single question with a single answer. There cant be any backslashes or symbols nor brackets. Only respond with the JSON. Maximum 3 "question" "answer" pairs. In case there are urls output them with only the domain name. Be descriptive and truthful to original wording in the answers and short with the questions.'
+
 
 client = OpenAI(base_url="http://localhost:8081/v1", api_key="not-needed") # For LM Studio
 
@@ -64,7 +63,15 @@ PDF_CHUNK_SIZE = 512
 # Chunk size for web pages
 WEBPAGE_CHUNK_SIZE = 128
 
+# Global variables
+DEPTH_LIMIT = 2
 global_token_count = 0
+questions_answers = []
+chunks_processed = 0
+existing_pairs = set()
+unique_qa_pairs = set()
+visited_urls = set()
+
 
 with open(tmp_file, "w", encoding="utf-8") as txt_file:
     print(f"Cleaning tmp.txt...")
@@ -89,92 +96,80 @@ def extract_text_from_pdf(pdf_file):
             text += page.extract_text()
     return text
 
+
 # Function to chunk text and process each chunk
-def process_text_in_chunks(text, chunk_size, process_chunk_function):
+def process_text_in_chunks(text, chunk_size, process_text_chunk):
     tokens = tokenize_text(text)
     token_chunks = [tokens[i:i + chunk_size] for i in range(0, len(tokens), chunk_size)]
     for i, chunk in enumerate(token_chunks):
         print(f"Processing chunk {i+1}/{len(token_chunks)}")
-        process_chunk_function(' '.join(chunk))
+        process_text_chunk(' '.join(chunk))
+
+# Function to process a chunk of text
+def process_text_chunk(text_chunk):
+    global global_token_count, chunks_processed
+    try:
+        process_text_for_api(text_chunk)
+        token_count = len(tokenize_text(text_chunk))
+        global_token_count += token_count
+        print(f"Token count for this chunk: {token_count}")
+        print(f"Global token count: {global_token_count}")
+        chunks_processed += 1
+    except Exception as e:
+        print(f"Error processing chunk: {str(e)}")
 
 # Function to extract text from a webpage and process it
 def process_webpage(url, depth=0):
     response = requests.get(url)
     if response.status_code == 200:  # Check if the request was successful
         soup = BeautifulSoup(response.content, 'html.parser')
-        # Extract text from all paragraphs
         paragraphs = soup.find_all('p')
         text = ' '.join([paragraph.get_text() for paragraph in paragraphs])
         process_text_in_chunks(text, WEBPAGE_CHUNK_SIZE, process_text_chunk)
-
-        # Check if depth is greater than 0 before processing links recursively
         if depth > 0:
-            # Find all links on the page and process them recursively
             links = soup.find_all('a', href=True)
             for link in links:
                 if link['href'].startswith('http'):
                     sub_url = urljoin(url, link['href'])
-                    process_webpage(sub_url, depth=depth - 1)  # Decrease depth by 1
+                    process_webpage(sub_url, depth=depth - 1)
 
 
-visited_urls = set()
 # Function to crawl a website and extract text from all pages
 def crawl_website(url, depth=0, base_domain=None):
-    global visited_urls  # Declare as global to modify the global variable
+    global visited_urls
     if depth > DEPTH_LIMIT or url in visited_urls:
         return
-    visited_urls.add(url)  # Add the current URL to visited URLs
-    print(f"Visiting URL: {url}, Depth: {depth}")  # Print the URL and depth being visited
+    visited_urls.add(url)
+    print(f"Visiting URL: {url}, Depth: {depth}")
     if base_domain is None:
-        base_domain = urlparse(url).netloc  # Get the base domain of the starting URL
+        base_domain = urlparse(url).netloc
     if urlparse(url).netloc != base_domain:
-        return  # Skip URLs that are not in the same domain
+        return
     if url.lower().endswith('.pdf'):
-        if os.path.exists(url):  # Remove this condition, as it's not applicable for online PDFs
-            text = extract_text_from_pdf(url)
-            process_text_in_chunks(text, PDF_CHUNK_SIZE, process_text_chunk)
-        else:
-            response = requests.get(url)
-            if response.status_code == 200:
-                with open('temp_pdf.pdf', 'wb') as f:
-                    f.write(response.content)
-                text = extract_text_from_pdf('temp_pdf.pdf')
+            if os.path.exists(url):  # Remove this condition, as it's not applicable for online PDFs
+                text = extract_text_from_pdf(url)
                 process_text_in_chunks(text, PDF_CHUNK_SIZE, process_text_chunk)
-                os.remove('temp_pdf.pdf')
             else:
-                print(f"Failed to download PDF from {url}")
+                response = requests.get(url)
+                if response.status_code == 200:
+                    with open('temp_pdf.pdf', 'wb') as f:
+                        f.write(response.content)
+                    text = extract_text_from_pdf('temp_pdf.pdf')
+                    process_text_in_chunks(text, PDF_CHUNK_SIZE, process_text_chunk)
+                    os.remove('temp_pdf.pdf')
+                else:
+                    print(f"Failed to download PDF from {url}")
     else:
         process_webpage(url)
-        if depth < DEPTH_LIMIT:  # Check depth before crawling further
+        if depth < DEPTH_LIMIT:
             response = requests.get(url)
-            if response.status_code == 200:  # Check if the request was successful
+            if response.status_code == 200:
                 soup = BeautifulSoup(response.content, 'html.parser')
-                # Find all links on the page and process them recursively
                 links = soup.find_all('a', href=True)
                 for link in links:
                     sub_url = urljoin(url, link['href'])
-                    crawl_website(sub_url, depth=depth + 1, base_domain=base_domain)  # Pass base_domain recursively
+                    crawl_website(sub_url, depth=depth + 1, base_domain=base_domain)
 
-
-
-
-# Define questions_answers globally
-questions_answers = []
-chunks_processed = 0
-# Function to process a chunk of text
-def process_text_chunk(text_chunk):
-    global global_token_count, chunks_processed
-    # Process the chunk of text
-    try:
-        process_text_for_api(text_chunk)
-        # Update token count for this chunk
-        token_count = len(tokenize_text(text_chunk))
-        global_token_count += token_count
-        print(f"Token count for this chunk: {token_count}")
-        print(f"Global token count: {global_token_count}")
-        chunks_processed += 1  # Increment the chunks_processed counter
-    except Exception as e:
-        print(f"Error processing chunk: {str(e)}")
 
       
 # Function to process text for the API
@@ -287,4 +282,3 @@ def extract_qa_and_save(tmp_file, output_file):
 # Example usage:
 pdf_or_webpage = Webpage_or_PDF  # Webpage URL or pdf
 crawl_website(pdf_or_webpage)
-
