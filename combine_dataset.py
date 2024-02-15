@@ -20,9 +20,18 @@ def extract_qa_pairs_from_folder(folder_path):
             qa_pairs.update(extract_qa_pairs_from_file(file_path))
     return qa_pairs
 
+def load_existing_data(output_file):
+    existing_data = set()
+    if os.path.exists(output_file):
+        with open(output_file, 'r', encoding='utf-8') as file:
+            existing_data = set((item["question"], item["answer"]) for item in json.load(file))
+    return existing_data
+
 def write_to_json(qa_pairs, output_file):
+    existing_data = load_existing_data(output_file)
+    merged_data = existing_data.union(qa_pairs)
     with open(output_file, 'w', encoding='utf-8') as file:
-        formatted_qa_pairs = [{"question": q, "answer": a} for q, a in qa_pairs]
+        formatted_qa_pairs = [{"question": q, "answer": a} for q, a in merged_data]
         json.dump(formatted_qa_pairs, file, indent=4, ensure_ascii=False)
 
 def main():
