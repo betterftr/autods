@@ -20,8 +20,9 @@ Edit Chunk sizes:
 `PDF_CHUNK_SIZE = 512
 WEBPAGE_CHUNK_SIZE = 128`
 
-LLM used in my tests:
->mistral-7b-instruct-v0.2.Q4_0.gguf
+Tested with:
+>LM Studio + mistral-7b-instruct-v0.2.Q4_0.gguf
+>Which has message format {System}[INST]{User}[/INST]{Assistant} for other formats, api needs some editing
 
 
 Working:
