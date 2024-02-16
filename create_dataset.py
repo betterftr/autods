@@ -72,6 +72,11 @@ DEPTH_LIMIT = 1
 tags_to_process = ['h1'] # leave it empty to process (and send to the tokenizer) the content every tag on the page: like so '[]'
 classes_to_crawl = ['.rel-link', '.story-short-title'] # leave it empty to crawl everything on the page for urls: like so '[]'
 
+# Scroll settings
+depth_limit_0_scrolling = True
+depth_limit_1_scrolling = False
+depth_limit_2_scrolling = False
+
 # Global variables
 global_token_count = 0
 questions_answers = []
@@ -285,19 +290,51 @@ def crawl_website(url, depth=0, base_domain=None, main_tab=True):
 
 
 # Function to scroll down a webpage using Selenium
-def scroll_down(driver, scroll_pause_time=1):
-    # Get current page height
-    last_height = driver.execute_script("return document.body.scrollHeight")
-    while True:
-        # Scroll down to bottom
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        # Wait to load page
-        time.sleep(scroll_pause_time)
-        # Calculate new scroll height and compare with last scroll height
-        new_height = driver.execute_script("return document.body.scrollHeight")
-        if new_height == last_height:
-            break
-        last_height = new_height
+def scroll_down(driver, depth, scroll_pause_time=1):
+    global depth_limit_0_scrolling, depth_limit_1_scrolling, depth_limit_2_scrolling
+    
+    if depth == 0 and depth_limit_0_scrolling:
+        # Scroll down only if depth is 0 and depth_limit_0_scrolling is True
+        # Get current page height
+        last_height = driver.execute_script("return document.body.scrollHeight")
+        while True:
+            # Scroll down to bottom
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            # Wait to load page
+            time.sleep(scroll_pause_time)
+            # Calculate new scroll height and compare with last scroll height
+            new_height = driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                break
+            last_height = new_height
+    elif depth == 1 and depth_limit_1_scrolling:
+        # Scroll down only if depth is 1 and depth_limit_1_scrolling is True
+        # Get current page height
+        last_height = driver.execute_script("return document.body.scrollHeight")
+        while True:
+            # Scroll down to bottom
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            # Wait to load page
+            time.sleep(scroll_pause_time)
+            # Calculate new scroll height and compare with last scroll height
+            new_height = driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                break
+            last_height = new_height
+    elif depth == 2 and depth_limit_2_scrolling:
+        # Scroll down only if depth is 2 and depth_limit_2_scrolling is True
+        # Get current page height
+        last_height = driver.execute_script("return document.body.scrollHeight")
+        while True:
+            # Scroll down to bottom
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            # Wait to load page
+            time.sleep(scroll_pause_time)
+            # Calculate new scroll height and compare with last scroll height
+            new_height = driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                break
+            last_height = new_height
 
 
 # Function to extract and process content
@@ -322,7 +359,7 @@ def extract_and_process_content(driver, depth):
             process_text_in_chunks(text, WEBPAGE_CHUNK_SIZE, process_text_chunk)
     
     # Scroll down to load more content
-    scroll_down(driver)
+    scroll_down(driver, depth)
         
 # Function to process text for the API
 def process_text_for_api(text):
