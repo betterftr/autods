@@ -25,9 +25,8 @@ Edit Chunk sizes:
 WEBPAGE_CHUNK_SIZE = 128`
 
 Customize processing:
->example
-`tags_to_process = ['h1', 'p'] # leave it empty to process (and send to the tokenizer) the content every tag on the page: like so '[]'
-classes_to_crawl = ['.rel-link', '.story-short-title'] # leave it empty to crawl everything on the page for urls: like so '[]'`
+>tags_to_process = ['h1', 'p'] # leave it empty to process (and send to the tokenizer) the content every tag on the page: like so '[]
+>classes_to_crawl = ['.rel-link', '.story-short-title'] # leave it empty to crawl everything on the page for urls: like so '[]'
 
 Tested with:
 >LM Studio + `mistral-7b-instruct-v0.2.Q4_0.gguf`
