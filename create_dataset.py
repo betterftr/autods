@@ -117,10 +117,10 @@ with open(output_file, "w", encoding="utf-8") as txt_file:
 # Set up Selenium WebDriver
 options = Options()
 # block image loading
-options.experimental_options['prefs'] = {
-    'profile.managed_default_content_settings.images': 2,
-    'profile.managed_default_content_settings.javascript': 2
-}
+# options.experimental_options['prefs'] = {
+#     'profile.managed_default_content_settings.images': 2,
+#     'profile.managed_default_content_settings.javascript': 2
+# }
 # options.add_argument('--headless') # You can comment this out if you want to hide the browser, but it's not recommended
 options.add_argument("--window-size=1280,720")
 options.add_argument("--no-sandbox")
