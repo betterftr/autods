@@ -79,6 +79,7 @@ chunks_processed = 0
 existing_pairs = set()
 unique_qa_pairs = set()
 visited_urls = set()
+tab_stack = []
 
 # tokenize text using nltk
 def tokenize_text(text):
@@ -171,31 +172,48 @@ def process_text_chunk(text_chunk):
     except Exception as e:
         print(f"Error processing chunk: {str(e)}")
 
-# Function to open a new tab and process the webpage
 def open_webpage_in_new_tab(url, depth, driver):
+    global tab_stack
+    if depth <= DEPTH_LIMIT:
+        # Get the current window handle (parent tab)
+        parent_tab_handle = driver.current_window_handle
+        
+        driver.execute_script("window.open();")
+        # Switch to the new tab
+        new_window_handles = driver.window_handles
+        new_tab_handle = new_window_handles[-1]
+        driver.switch_to.window(new_tab_handle)
+        # Push the new tab handle and parent tab handle onto the stack
+        tab_stack.append((new_tab_handle, parent_tab_handle))
+        # Wait for the page to load
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        # Process the webpage
+        process_webpage(url, depth, driver)
+        # Check for alerts
+        try:
+            alert = driver.switch_to.alert
+            if alert is not None:
+                alert.accept()
+        except NoAlertPresentException:
+            pass
+        return new_tab_handle
+    else:
+        print("Depth limit reached. Not opening new tab.")
+        return None
 
-    driver.execute_script("window.open();")
-    
-    # Switch to the new tab
-    new_window_handles = driver.window_handles
-    new_tab_handle = new_window_handles[-1]
-    driver.switch_to.window(new_tab_handle)
-    
-    # Wait for the page to load
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-    
-    # Process the webpage
-    process_webpage(url, depth, driver)
-    
-    # Check for alerts
+# Modify the switch_back_to_previous_tab function to handle NoSuchWindowException
+def switch_back_to_previous_tab(driver):
     try:
-        alert = driver.switch_to.alert
-        if alert is not None:
-            alert.accept()
-    except NoAlertPresentException:
-        pass
-    
-    return new_tab_handle
+        # Close the current tab
+        driver.close()
+        # Pop the tab handle and parent tab handle from the stack
+        previous_tab_handle, parent_tab_handle = tab_stack.pop()
+        # Switch back to the previous tab (parent tab)
+        driver.switch_to.window(parent_tab_handle)
+    except IndexError:
+        print("No more tabs to switch back to.")
+    except NoSuchWindowException:
+        print("Previous window no longer exists.")
 
 
 # Function to extract text from a webpage and process it
@@ -212,6 +230,62 @@ def process_webpage(url, depth=0, driver=None):
         html = driver.page_source
         soup = BeautifulSoup(html, 'html.parser')
         extract_and_process_content(driver, depth)  # Pass the depth parameter
+
+# Function to crawl a website and extract text from all pages
+def crawl_website(url, depth=0, base_domain=None, main_tab=True):
+    global visited_urls
+    if depth > DEPTH_LIMIT or url in visited_urls:
+        return
+    visited_urls.add(url)
+    print(f"Visiting URL: {url}, Depth: {depth}")
+    if base_domain is None:
+        base_domain = urlparse(url).netloc
+    if urlparse(url).netloc != base_domain:
+        return
+
+    if main_tab:
+        process_webpage(url, depth, driver)
+    else:
+        new_tab_handle = open_webpage_in_new_tab(url, depth, driver)
+
+    if depth < DEPTH_LIMIT:
+        if not classes_to_crawl:
+            # If classes_to_crawl is empty, crawl every element for new URLs
+            links = driver.find_elements(By.XPATH, '//a[@href]')
+            for link in links:
+                sub_url = link.get_attribute('href')
+                crawl_website(sub_url, depth=depth + 1, base_domain=base_domain, main_tab=False)
+        else:
+            # Find all links with classes specified in classes_to_crawl
+            for class_name in classes_to_crawl:
+                links = driver.find_elements(By.CSS_SELECTOR, class_name)
+                for link in links:
+                    try:
+                        sub_url = link.get_attribute('href')
+                        if sub_url:
+                            crawl_website(sub_url, depth=depth + 1, base_domain=base_domain, main_tab=False)
+                    except StaleElementReferenceException:
+                        print("StaleElementReferenceException occurred. Skipping this link.")
+
+    if not main_tab:
+        switch_back_to_previous_tab(driver)  # Switch back to the main tab
+
+
+# Function to scroll down a webpage using Selenium
+def scroll_down(driver, scroll_pause_time=1):
+    # Get current page height
+    last_height = driver.execute_script("return document.body.scrollHeight")
+    while True:
+        # Scroll down to bottom
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        # Wait to load page
+        time.sleep(scroll_pause_time)
+        # Calculate new scroll height and compare with last scroll height
+        new_height = driver.execute_script("return document.body.scrollHeight")
+        if new_height == last_height:
+            break
+        last_height = new_height
+
 
 # Function to extract and process content
 def extract_and_process_content(driver, depth):
@@ -236,75 +310,6 @@ def extract_and_process_content(driver, depth):
     
     # Scroll down to load more content
     scroll_down(driver)
-
-
-# Function to scroll down a webpage using Selenium
-def scroll_down(driver, scroll_pause_time=1):
-    # Get current page height
-    last_height = driver.execute_script("return document.body.scrollHeight")
-    while True:
-        # Scroll down to bottom
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        # Wait to load page
-        time.sleep(scroll_pause_time)
-        # Calculate new scroll height and compare with last scroll height
-        new_height = driver.execute_script("return document.body.scrollHeight")
-        if new_height == last_height:
-            break
-        last_height = new_height
-
-# Function to crawl a website and extract text from all pages
-def crawl_website(url, depth=0, base_domain=None, main_tab=True):
-    global visited_urls
-    if depth > DEPTH_LIMIT or url in visited_urls:
-        return
-    visited_urls.add(url)
-    print(f"Visiting URL: {url}, Depth: {depth}")
-    if base_domain is None:
-        base_domain = urlparse(url).netloc
-    if urlparse(url).netloc != base_domain:
-        return
-
-    if url.lower().endswith('.pdf'):
-            if os.path.exists(url):  # Remove this condition, as it's not applicable for online PDFs
-                text = extract_text_from_pdf(url)
-                process_text_in_chunks(text, PDF_CHUNK_SIZE, process_text_chunk)
-            else:
-                response = requests.get(url)
-                if response.status_code == 200:
-                    with open('temp_pdf.pdf', 'wb') as f:
-                        f.write(response.content)
-                    text = extract_text_from_pdf('temp_pdf.pdf')
-                    process_text_in_chunks(text, PDF_CHUNK_SIZE, process_text_chunk)
-                    os.remove('temp_pdf.pdf')
-                else:
-                    print(f"Failed to download PDF from {url}")
-    if main_tab:
-        process_webpage(url, depth, driver)
-    else:
-        new_tab_handle = open_webpage_in_new_tab(url, depth, driver)
-
-    if not classes_to_crawl:
-        # If classes_to_crawl is empty, crawl every element for new URLs
-        links = driver.find_elements(By.XPATH, '//a[@href]')
-        for link in links:
-            sub_url = link.get_attribute('href')
-            crawl_website(sub_url, depth=depth + 1, base_domain=base_domain, main_tab=False)
-    else:
-        # Find all links with classes specified in classes_to_crawl
-        for class_name in classes_to_crawl:
-            links = driver.find_elements(By.CSS_SELECTOR, class_name)
-            for link in links:
-                try:
-                    sub_url = link.get_attribute('href')
-                    if sub_url:
-                        crawl_website(sub_url, depth=depth + 1, base_domain=base_domain, main_tab=False)
-                except StaleElementReferenceException:
-                    print("StaleElementReferenceException occurred. Skipping this link.")
-
-    if not main_tab:
-        driver.close()  # Close the new tab
-        driver.switch_to.window(driver.window_handles[0])  # Switch back to the main tab
         
 # Function to process text for the API
 def process_text_for_api(text):
