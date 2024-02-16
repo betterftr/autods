@@ -242,7 +242,20 @@ def crawl_website(url, depth=0, base_domain=None, main_tab=True):
         base_domain = urlparse(url).netloc
     if urlparse(url).netloc != base_domain:
         return
-
+    if url.lower().endswith('.pdf'):
+            if os.path.exists(url):  # Remove this condition, as it's not applicable for online PDFs
+                text = extract_text_from_pdf(url)
+                process_text_in_chunks(text, PDF_CHUNK_SIZE, process_text_chunk)
+            else:
+                response = requests.get(url)
+                if response.status_code == 200:
+                    with open('temp_pdf.pdf', 'wb') as f:
+                        f.write(response.content)
+                    text = extract_text_from_pdf('temp_pdf.pdf')
+                    process_text_in_chunks(text, PDF_CHUNK_SIZE, process_text_chunk)
+                    os.remove('temp_pdf.pdf')
+                else:
+                    print(f"Failed to download PDF from {url}")
     if main_tab:
         process_webpage(url, depth, driver)
     else:
