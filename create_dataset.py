@@ -23,6 +23,7 @@ except LookupError:
     print("Downloading NLTK data...")
     nltk.download('punkt')
 
+import re
 import PyPDF2
 import os
 import sentencepiece
@@ -30,27 +31,29 @@ import time
 import json
 import nltk
 import requests
+import mimetypes
 from bs4 import BeautifulSoup, Tag
 from openai import OpenAI
-from urllib.parse import urljoin, urlparse
-import re
-from collections import defaultdict, deque
 from combine_dataset import main
 from selenium import webdriver
+from collections import defaultdict, deque
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
+from urllib.parse import urljoin, urlparse, urlunparse, unquote
 from selenium.common.exceptions import NoAlertPresentException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import StaleElementReferenceException
+from selenium.webdriver.common.action_chains import ActionChains
 
 
 # Webpage_or_PDF = './online_or_local.pdf'
 Webpage_or_PDF = 'https://www.somewebsite.com/'
 
-#Prompt stuff, include your models needs like ### Instruction: ### Response:
-system_message = 'You are an API that converts bodies of text into JSON. Json pairs format: "question" and "answer" lowercase. Each JSON contains a single question with a single answer. There cant be any backslashes or symbols nor brackets. Only respond with the JSON. Maximum 3 "question" "answer" pairs. In case there are urls output them with only the domain name. Be descriptive and truthful to original wording in the answers and short with the questions.'
+#Prompt stuff
+system_message = 'You are an API that creates "instruction" for a text. The format has to be JSON. Instruction is always "Describe the title". Description is always the content copied word by word. Do not alter or change the description, just copy if from the source text. Do not include any additional text in "description".'
+
 user_message = ''
 assistant_message = ''
 
@@ -58,6 +61,10 @@ client = OpenAI(base_url="http://localhost:8081/v1", api_key="not-needed") # For
 
 directory = "./jsons/"
 tmp_file = './tmp.txt'
+image_dataset_folder = "./dataset" # directory where images and assistant's response will be stored
+
+DATASET_MODE = True # regular LLM JSON dataset mode
+IMAGE_CAPTION_MODE = False # Image downloading and captioning mode
 
 # Chunk size for PDFs
 PDF_CHUNK_SIZE = 512
@@ -66,11 +73,16 @@ PDF_CHUNK_SIZE = 512
 WEBPAGE_CHUNK_SIZE = 128
 
 # limit on crawling websites
-DEPTH_LIMIT = 1
+DEPTH_LIMIT = 0
 
-# customize html processing and crawling
-tags_to_process = ['h1'] # leave it empty to process (and send to the tokenizer) the content every tag on the page: like so '[]'
-classes_to_crawl = ['.rel-link', '.story-short-title'] # leave it empty to crawl everything on the page for urls: like so '[]'
+# Customize html processing and crawling. EITHER select_by_CSS_SELECTOR or select_by_TAG_NAME, leave the other empty to use the other
+select_by_CSS_SELECTOR = [] # Example: ["a[href*='/pin/']"]. Select content by selenium css selector to process. Leave it empty to process everything on page: like so '[]'
+select_by_TAG_NAME = ['h1'] # Example: ['a', 'h1']. Select content by selenium tag selector on the pages to process. Leave it empty to process everything on page: like so '[]'
+classes_to_crawl = ['.rel-link'] # Example: ['.rel-link', '.story-short-title']. Url crawling restriction to certain classes. Leave it empty to crawl everything on the page for urls: like so '[]'
+
+# image downloading
+image_div_name = 'a' # check html source, excamples: if your images is located <img, then you input 'img'; if <a, then 'a'
+images_to_download = ['cdni.123test.com/1280'] # Partial image url in to look for
 
 # Scroll settings
 depth_limit_0_scrolling = True
@@ -85,6 +97,7 @@ existing_pairs = set()
 unique_qa_pairs = set()
 visited_urls = set()
 tab_stack = []
+most_recent_image_name = []
 
 # tokenize text using nltk
 def tokenize_text(text):
@@ -100,22 +113,23 @@ parsed_url = urlparse(Webpage_or_PDF)
 basename = os.path.basename(parsed_url.path.rstrip('/'))
 # Directory path
 
-output_file = f"{directory}/{basename}_cleaned.json"
-# Ensure directory exists and create file if not exist
-os.makedirs(directory, exist_ok=True)
-if not os.path.exists(output_file):
-    with open(output_file, 'w', encoding="utf-8") as f:
-        f.write('')
-
 with open(tmp_file, "w", encoding="utf-8") as txt_file:
     print(f"Cleaning tmp.txt...")
     # Write an empty string to clear the file
     txt_file.write("")
 
-with open(output_file, "w", encoding="utf-8") as txt_file:
-    print(f"Cleaning existing output...")
-    # Write an empty string to clear the file
-    txt_file.write("")
+if DATASET_MODE:
+    output_file = f"{directory}/{basename}_cleaned.json"
+    # Ensure directory exists and create file if not exist
+    os.makedirs(directory, exist_ok=True)
+    if not os.path.exists(output_file):
+        with open(output_file, 'w', encoding="utf-8") as f:
+            f.write('')
+
+    with open(output_file, "w", encoding="utf-8") as txt_file:
+        print(f"Cleaning existing output...")
+        # Write an empty string to clear the file
+        txt_file.write("")
 
 ######################
 ###Selenium Options###
@@ -247,20 +261,22 @@ def crawl_website(url, depth=0, base_domain=None, main_tab=True):
         base_domain = urlparse(url).netloc
     if urlparse(url).netloc != base_domain:
         return
+
     if url.lower().endswith('.pdf'):
-            if os.path.exists(url):  # Remove this condition, as it's not applicable for online PDFs
-                text = extract_text_from_pdf(url)
-                process_text_in_chunks(text, PDF_CHUNK_SIZE, process_text_chunk)
-            else:
-                response = requests.get(url)
-                if response.status_code == 200:
-                    with open('temp_pdf.pdf', 'wb') as f:
-                        f.write(response.content)
-                    text = extract_text_from_pdf('temp_pdf.pdf')
+                if os.path.exists(url):  # Remove this condition, as it's not applicable for online PDFs
+                    text = extract_text_from_pdf(url)
                     process_text_in_chunks(text, PDF_CHUNK_SIZE, process_text_chunk)
-                    os.remove('temp_pdf.pdf')
                 else:
-                    print(f"Failed to download PDF from {url}")
+                    response = requests.get(url)
+                    if response.status_code == 200:
+                        with open('temp_pdf.pdf', 'wb') as f:
+                            f.write(response.content)
+                        text = extract_text_from_pdf('temp_pdf.pdf')
+                        process_text_in_chunks(text, PDF_CHUNK_SIZE, process_text_chunk)
+                        os.remove('temp_pdf.pdf')
+                    else:
+                        print(f"Failed to download PDF from {url}")
+
     if main_tab:
         process_webpage(url, depth, driver)
     else:
@@ -295,76 +311,127 @@ def scroll_down(driver, depth, scroll_pause_time=1):
     
     if depth == 0 and depth_limit_0_scrolling:
         # Scroll down only if depth is 0 and depth_limit_0_scrolling is True
-        # Get current page height
         last_height = driver.execute_script("return document.body.scrollHeight")
         while True:
-            # Scroll down to bottom
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             # Wait to load page
             time.sleep(scroll_pause_time)
-            # Calculate new scroll height and compare with last scroll height
             new_height = driver.execute_script("return document.body.scrollHeight")
             if new_height == last_height:
                 break
             last_height = new_height
     elif depth == 1 and depth_limit_1_scrolling:
         # Scroll down only if depth is 1 and depth_limit_1_scrolling is True
-        # Get current page height
         last_height = driver.execute_script("return document.body.scrollHeight")
         while True:
-            # Scroll down to bottom
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             # Wait to load page
             time.sleep(scroll_pause_time)
-            # Calculate new scroll height and compare with last scroll height
             new_height = driver.execute_script("return document.body.scrollHeight")
             if new_height == last_height:
                 break
             last_height = new_height
     elif depth == 2 and depth_limit_2_scrolling:
         # Scroll down only if depth is 2 and depth_limit_2_scrolling is True
-        # Get current page height
         last_height = driver.execute_script("return document.body.scrollHeight")
         while True:
-            # Scroll down to bottom
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             # Wait to load page
             time.sleep(scroll_pause_time)
-            # Calculate new scroll height and compare with last scroll height
             new_height = driver.execute_script("return document.body.scrollHeight")
             if new_height == last_height:
                 break
             last_height = new_height
 
-
 # Function to extract and process content
 def extract_and_process_content(driver, depth):
-    global tags_to_process
-    if not tags_to_process:
-        # Get all tags present on the webpage
-        all_tags = driver.find_elements(By.XPATH, '//*')
-        
-        # Extract and process text content from each tag
-        for tag in all_tags:
-            text = tag.text.strip()  # Strip any leading or trailing whitespace
-            if text:
-                process_text_in_chunks(text, WEBPAGE_CHUNK_SIZE, process_text_chunk)
-    else:
-        # Define tags to extract and process
-        tags_to_extract = [(tag, '') for tag in tags_to_process]  # Add more tags as needed
+    global select_by_CSS_SELECTOR, select_by_TAG_NAME
 
-        for tag_name, text_variable in tags_to_extract:
-            elements = driver.find_elements(By.TAG_NAME, tag_name)
-            text = ' '.join([element.text for element in elements])
-            process_text_in_chunks(text, WEBPAGE_CHUNK_SIZE, process_text_chunk)
-    
-    # Scroll down to load more content
+
+    downloaded_image_paths = []
+
+    if not select_by_CSS_SELECTOR:
+        select_by_CSS_SELECTOR = select_by_TAG_NAME
+    elif not select_by_TAG_NAME:
+        select_by_TAG_NAME = select_by_CSS_SELECTOR
+
+
+    tags_to_extract = [(tag, '') for tag in select_by_TAG_NAME]
+
+    for tag_name, text_variable in tags_to_extract:
+        elements = driver.find_elements(By.TAG_NAME, tag_name)
+        text = ' '.join([element.text for element in elements])
+        process_text_in_chunks(text, WEBPAGE_CHUNK_SIZE, process_text_chunk)
+
+
     scroll_down(driver, depth)
-        
+
+def create_directory_if_not_exists(directory):
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+def download_image(src, directory, folder_name, image_name):
+    if src:
+        if image_name is None:
+            image_name = os.path.basename(src)  # Use the source URL as the image name if image_name is None
+        image_path = os.path.join(directory, folder_name, image_name)
+        try:
+            if not os.path.isdir(os.path.join(directory, folder_name)):
+                os.makedirs(os.path.join(directory, folder_name))
+            response = requests.get(src)
+            with open(image_path, 'wb') as f:
+                f.write(response.content)
+            print(f"Downloaded image: {image_path}")  # Print out the downloaded image path
+            return image_path  # Return the path of the downloaded image
+        except Exception as e:
+            print(f"Error downloading image: {e}")
+            return None
+    return None  # Return None if src is None
+
+def download_images_from_selenium(driver, url):
+    global IMAGE_CAPTION_MODE, chunks_processed
+    
+    parsed_url = urlparse(url)
+    domain = parsed_url.netloc.replace("www.", "")
+    directory = os.path.join(image_dataset_folder, domain)
+    create_directory_if_not_exists(directory)
+
+    # List to store downloaded image paths
+    downloaded_image_paths = []
+
+    for partial_url in images_to_download:
+        if isinstance(partial_url, str):
+            print("Using partial URL:", partial_url)
+            # Use a custom XPath expression to find anchor tags with href or src containing the partial URL
+            xpath_expression = f"//{image_div_name}[contains(@href, '{partial_url}') or contains(@src, '{partial_url}')]"
+            image_elements = driver.find_elements(By.XPATH, xpath_expression)
+            for img_element in image_elements:
+                href = img_element.get_attribute('href')
+                src = img_element.get_attribute('src')
+                if href and partial_url in href:
+                    attribute_to_use = 'href'
+                elif src and partial_url in src:
+                    attribute_to_use = 'src'
+                else:
+                    continue
+
+                parsed_url = urlparse(attribute_to_use)
+                folder_name = ""
+                if parsed_url.path and len(parsed_url.path.split('/')) > 1:
+                    folder_name = parsed_url.path.split('/')[-2]
+                
+                # Download the image with the constructed folder name
+                image_path = download_image(img_element.get_attribute(attribute_to_use), directory, folder_name, img_element.get_attribute('alt'))
+                if image_path:
+                    downloaded_image_paths.append(image_path)  # Add the downloaded image path to the list
+
+    return downloaded_image_paths
+
+
 # Function to process text for the API
 def process_text_for_api(text):
-    global questions_answers  # Declare as global to modify the global variable
-    # Initialize an empty list to store responses for this chunk
+    global questions_answers
+    # Initialize an empty list to store responses
     all_responses = []
     try:
         # Initialize history for the chunk
@@ -382,7 +449,7 @@ def process_text_for_api(text):
         
         # Send the chunk to OpenAI
         completion = client.chat.completions.create(
-            model="local-model",  # this field is currently unused
+            model="local-model",  # unused for local
             messages=history,
             temperature=0.5,
             top_p=0.2,
@@ -403,9 +470,53 @@ def process_text_for_api(text):
                 for response in all_responses:
                     txt_file.write(f"\"role\": \"{response['role']}\"\n")
                     txt_file.write(f"\"content\": \"{response['content']}\"\n\n")
-                    
+
+            if IMAGE_CAPTION_MODE and chunks_processed % 1 == 0:
+                # Update the code where you call download_images_from_selenium
+                downloaded_image_paths = download_images_from_selenium(driver, driver.current_url)
+                if downloaded_image_paths:
+                    for image_path in downloaded_image_paths:
+                        # Construct the path for the .txt file in the same folder as the image
+                        txt_file_path = os.path.splitext(image_path)[0] + '.txt'
+                        print("TXT file path:", txt_file_path)  # Debug information
+
+                        # Get the assistant's response content from new_message
+                        assistant_response_content = new_message["content"]
+                        try:
+                            # Check if the content is in JSON format
+                            try:
+                                response_json = json.loads(assistant_response_content)
+                                # If it's JSON, extract content from the second key
+                                keys = list(response_json.keys())
+                                if len(keys) >= 2:
+                                    second_key = keys[1]
+                                    assistant_response_content = response_json[second_key]
+                            except json.JSONDecodeError:
+                                # If it's not JSON, keep the content as it is
+                                pass
+
+                            # Write the content to the .txt file
+                            with open(txt_file_path, 'w', encoding='utf-8') as txt_file:
+                                txt_file.write(assistant_response_content)
+                            print(f"Created txt file: {txt_file_path}")  # Print message to confirm the creation of the file
+                        except Exception as e:
+                            print("Error creating txt file:", str(e))  # Print error message
+                else:
+                    print("No image has been downloaded yet.")
+            else:
+                print("No images have been downloaded.")
+
+
+
+
 
             if chunks_processed % 2 == 0:
+                all_responses.clear()
+                questions_answers.clear()
+                existing_pairs.clear()
+                unique_qa_pairs.clear()
+
+            if DATASET_MODE and chunks_processed % 2 == 0:
                 all_responses.clear()
                 questions_answers.clear()
                 existing_pairs.clear()
@@ -418,50 +529,48 @@ def process_text_for_api(text):
                 main()
                 
         
-        extract_qa_and_save(tmp_file, output_file)       
+        if DATASET_MODE:
+            extract_qa_and_save(tmp_file, output_file)       
     except Exception as e:
         print("Error occurred:", str(e))
-
 
 # Function to extract questions and answers and save them to a new file
 def extract_qa_and_save(tmp_file, output_file):
     try:
+        if DATASET_MODE:  # Check if DATASET_MODE is True before proceeding
+            # Parse the content of the tmp file
+            with open(tmp_file, 'r', encoding='utf-8') as file:
+                data = file.read()  # Read the entire file as a single string
+                data = data.replace('\\', '') 
+                # Define the pattern to extract question-answer pairs
+                pattern = r'"instruction"\s*:\s*"([^"]+)"\s*,\s*"description"\s*:\s*"([^"]+(?:https?://[^\s]+)*)"'
+                matches = re.findall(pattern, data)
 
-        
-        # Parse the content of the tmp file
-        with open(tmp_file, 'r', encoding='utf-8') as file:
-            data = file.read()  # Read the entire file as a single string
-            data = data.replace('\\', '') 
-            # Define the pattern to extract question-answer pairs
-            pattern = r'"question"\s*:\s*"([^"]+)"\s*,\s*"answer"\s*:\s*"([^"]+(?:https?://[^\s]+)*)"'
-            matches = re.findall(pattern, data)
+                # Iterate over matches and add them to unique_qa_pairs set
+                for match in matches:
+                    question = match[0].strip()  # Strip to remove any leading/trailing spaces
+                    answer = match[1].strip()
+                    unique_qa_pairs.add((question, answer))
 
-            # Iterate over matches and add them to unique_qa_pairs set
-            for match in matches:
-                question = match[0].strip()  # Strip to remove any leading/trailing spaces
-                answer = match[1].strip()
-                unique_qa_pairs.add((question, answer))
-
-        # Read existing content of the output file to avoid duplicates
-
-        try:
-            with open(output_file, 'r', encoding='utf-8') as json_file:
-                for line in json_file:
-                    try:
-                        qa_pair = json.loads(line)
-                        existing_pairs.add((qa_pair["question"], qa_pair["answer"]))
-                    except json.JSONDecodeError:
-                        print("Error decoding JSON:", line)  # Log the line causing the error
-                        pass  # If JSON decoding fails, skip this line
-        except FileNotFoundError:
-            pass  # If the file doesn't exist yet, no need to worry about duplicates
-            
-        # Append only unique question-answer pairs to the output file
-        with open(output_file, 'a', encoding='utf-8') as json_file:
-            for question, answer in unique_qa_pairs:
-                if (question, answer) not in existing_pairs:
-                    json.dump({"question": question, "answer": answer}, json_file, ensure_ascii=False)
-                    json_file.write('\n')  # Add a new line for separation
+            # Read existing content of the output file to avoid duplicates
+            try:
+                with open(output_file, 'r', encoding='utf-8') as json_file:
+                    for line in json_file:
+                        try:
+                            qa_pair = json.loads(line)
+                            existing_pairs.add((qa_pair["instruction"], qa_pair["description"]))
+                        except json.JSONDecodeError:
+                            print("Error decoding JSON:", line)  # Log the line causing the error
+                            pass  # If JSON decoding fails, skip this line
+            except FileNotFoundError:
+                pass  # If the file doesn't exist yet, no need to worry about duplicates
+                
+            # Append only unique question-answer pairs to the output file
+            with open(output_file, 'a', encoding='utf-8') as json_file:
+                for question, answer in unique_qa_pairs:
+                    if (question, answer) not in existing_pairs:
+                        json.dump({"instruction": question, "description": answer}, json_file, ensure_ascii=False)
+                        json_file.write('\n')  # Add a new line for separation
     except Exception as e:
         print("Error occurred during extraction:", str(e))
 
