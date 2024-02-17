@@ -34,13 +34,13 @@ WEBPAGE_CHUNK_SIZE = 128`
 Customize processing:
 >select_by_CSS_SELECTOR = [] # Example: ["a[href*='/pin/']"]. Select content by selenium css selector to process. Leave it empty to process everything on page: like so '[]'
 >
->select_by_TAG_NAME = ['h1'] # Example: ['a', 'h1']. Select content by selenium tag selector on the pages to process. Leave it empty to process everything on page: like so '[]'
+>select_by_TAG_NAME = [] # Example: ['a', 'h1']. Select content by selenium tag selector on the pages to process. Leave it empty to process everything on page: like so '[]'
 >
->classes_to_crawl = ['.rel-link'] # Example: ['.rel-link', '.story-short-title']. Url crawling restriction to certain classes. Leave it empty to crawl everything on the page for urls: like so '[]'
+>classes_to_crawl = [] # Example: ['.rel-link', '.story-short-title']. Url crawling restriction to certain classes. Leave it empty to crawl everything on the page for urls: like so '[]'
 >
->image_div_name = 'a' # check html source, excamples: if your images is located <img, then you input 'img'; if <a, then 'a'
+>image_div_name = '' # check html source, excamples: if your images is located <img, then you input 'img'; if <a, then 'a'
 >
->images_to_download = ['cdni.pornpics.com/1280'] # Partial image url in to look for
+>images_to_download = [] # Partial image url in to look for Example: ['cdni.asd123.com/1280']
 >
 >depth_limit_0/1/2_scrolling = False/True
 
